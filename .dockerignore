@@ -1,0 +1,17 @@
+**
+!package.json
+!LICENSE
+!THIRD_PARTY_NOTICES.md
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!electron-builder.cjs
+!electron.vite.config.ts
+!tsconfig*.json
+!playwright.config.ts
+!vitest*.ts
+!src/**
+!scripts/**
+!build-resources/**
+!tests/**
+tests/fixtures/runtime/**
+build-resources/generated/**

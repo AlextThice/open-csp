@@ -1,0 +1,9 @@
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  ssh2: false
+ignoredOptionalDependencies:
+  - cpu-features
+minimumReleaseAgeExclude:
+  - '@aws-sdk/client-s3@3.1126.0'

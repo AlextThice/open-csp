@@ -1,0 +1,82 @@
+name: Signed candidate (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        required: true
+        options: [macos-15, windows-latest]
+        description: Native signing runner (macOS must be arm64)
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    runs-on: ${{ inputs.platform }}
+    timeout-minutes: 60
+    environment: release-signing
+    env:
+      APP_BUNDLE_ID: ${{ vars.APP_BUNDLE_ID }}
+      APP_PRODUCT_NAME: ${{ vars.APP_PRODUCT_NAME }}
+      APP_PUBLISHER: ${{ vars.APP_PUBLISHER }}
+      APP_HOMEPAGE: ${{ vars.APP_HOMEPAGE }}
+      OPENSCP_SIGNED_BUILD: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@24.20.0
+          cache: true
+          require-lockfile: true
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:packaging
+      - name: Write temporary notarization API key
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: node scripts/write-notary-key.mjs
+      - name: Sign and notarize macOS candidate
+        if: runner.os == 'macOS'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ runner.temp }}/openscp-notary-key.p8
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: pnpm package:signed
+      - name: Verify ticket, signature and Gatekeeper after DMG install
+        if: runner.os == 'macOS'
+        run: bash scripts/smoke-installed-macos.sh release/*-mac-arm64.dmg
+      - name: Sign Windows candidate
+        if: runner.os == 'Windows'
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: pnpm package:signed
+      - name: Verify Windows signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem release/*-win-x64-*.exe | ForEach-Object {
+            if ((Get-AuthenticodeSignature -LiteralPath $_.FullName).Status -ne 'Valid') {
+              throw 'The artifact does not have a valid Authenticode signature.'
+            }
+          }
+      - name: Delete the temporary API key
+        if: always() && runner.os == 'macOS'
+        run: node scripts/write-notary-key.mjs --remove
+      - name: Save candidate only (T18/T21 and manual acceptance remain separate)
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-candidate-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            release/*-setup.exe
+            release/*-portable.exe
+            release/*.dmg
+            release/*.zip
+          retention-days: 7

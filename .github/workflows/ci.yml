@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@24.20.0
+          cache: true
+          require-lockfile: true
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:packaging
+      - run: pnpm licenses:check
+      - run: pnpm build
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnss3 libasound2 libgbm1 xvfb xauth
+      - name: Electron UI tests on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a pnpm exec playwright test
+      - name: Electron UI tests on Windows and macOS
+        if: runner.os != 'Linux'
+        run: pnpm exec playwright test
+      - name: Save failed UI traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-failure-${{ matrix.os }}
+          path: test-results/
+          retention-days: 7
+
+  integration:
+    name: OpenSSH and MinIO integration
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@24.20.0
+          cache: true
+          require-lockfile: true
+      - name: Install Linux desktop and keyring dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnss3 libasound2 libgbm1 libsecret-1-0 gnome-keyring dbus-x11 xvfb xauth
+      - run: pnpm fixtures:up
+      - run: pnpm test:integration
+      - run: pnpm build
+      - name: Electron protocol workflows with a disposable keyring
+        env:
+          OPENSCP_INTEGRATION: '1'
+          OPENSCP_DISPOSABLE_KEYRING: '1'
+        run: dbus-run-session -- bash tests/packaging/linux-keyring-smoke.sh exec playwright test
+      - name: Save failed protocol UI traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-ui-failure
+          path: test-results/
+          retention-days: 7
+      - name: Stop disposable fixtures
+        if: always()
+        run: pnpm fixtures:down

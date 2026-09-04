@@ -1,0 +1,11 @@
+.codegraph/
+IMPLEMENTATION_PLAN.md
+node_modules/
+out/
+/release/
+build-resources/generated/
+coverage/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+tests/fixtures/runtime/

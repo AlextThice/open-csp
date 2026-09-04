@@ -1,0 +1,75 @@
+name: Development packages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packages:
+    name: Package and install on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04, macos-15]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@24.20.0
+          cache: true
+          require-lockfile: true
+      - name: Check Apple Silicon runner
+        if: runner.os == 'macOS'
+        run: node -e "if (process.arch !== 'arm64') throw Error('Use an arm64 macOS runner')"
+      - name: Linux desktop and keyring dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 libatspi2.0-0 libuuid1 libsecret-1-0 libasound2 libgbm1 xdg-utils desktop-file-utils gnome-keyring dbus-x11 xvfb xauth
+      - run: pnpm package
+      - name: Install, smoke and uninstall NSIS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem release/*-win-x64-setup.exe).FullName
+          ./scripts/smoke-installed-windows.ps1 -InstallerPath $installer
+      - name: Copy from DMG and smoke on Apple Silicon
+        if: runner.os == 'macOS'
+        run: bash scripts/smoke-installed-macos.sh release/*-mac-arm64.dmg
+      - name: Start disposable protocol fixtures
+        if: runner.os == 'Linux'
+        run: pnpm fixtures:up
+      - name: Install DEB and test real keyring, OpenSSH and MinIO
+        if: runner.os == 'Linux'
+        env:
+          OPENSCP_PACKAGED_EXE: /opt/OpenSCP/openscp
+          OPENSCP_INTEGRATION: '1'
+          OPENSCP_DISPOSABLE_KEYRING: '1'
+        run: |
+          sudo dpkg -i release/*-linux-amd64.deb
+          desktop-file-validate /usr/share/applications/openscp.desktop
+          dbus-run-session -- bash tests/packaging/linux-keyring-smoke.sh
+          sudo dpkg -r openscp
+          bash scripts/smoke-appimage.sh release/*-linux-x86_64.AppImage
+      - name: Stop protocol fixtures
+        if: always() && runner.os == 'Linux'
+        run: pnpm fixtures:down
+      - name: Save development packages, never publish a release
+        uses: actions/upload-artifact@v4
+        with:
+          name: development-${{ runner.os }}-${{ runner.arch }}
+          if-no-files-found: error
+          path: |
+            release/*-setup.exe
+            release/*-portable.exe
+            release/*.deb
+            release/*.AppImage
+            release/*.dmg
+            release/*.zip
+          retention-days: 7
