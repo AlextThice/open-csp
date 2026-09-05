@@ -1,9 +1,11 @@
-name: Development packages
+name: Release packages
 
 on:
   push:
-  pull_request:
-  workflow_dispatch:
+    tags:
+      - '*'
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -60,10 +62,10 @@ jobs:
       - name: Stop protocol fixtures
         if: always() && runner.os == 'Linux'
         run: pnpm fixtures:down
-      - name: Save development packages, never publish a release
+      - name: Save release packages
         uses: actions/upload-artifact@v4
         with:
-          name: development-${{ runner.os }}-${{ runner.arch }}
+          name: release-${{ runner.os }}-${{ runner.arch }}
           if-no-files-found: error
           path: |
             release/*-setup.exe
