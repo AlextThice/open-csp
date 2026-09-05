@@ -39,6 +39,9 @@ export interface LocalProviderOptions {
 
 const readChunkSize = 64 * 1024;
 
+const isPathWithinRoot = (relativePath: string): boolean =>
+  relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath);
+
 const localProviderCapabilities: ProviderCapabilities = Object.freeze({
   atomicRename: true,
   checksum: false,
@@ -350,13 +353,19 @@ export class LocalProvider implements FileSystemProvider {
     }
 
     const resolvedPath = resolve(providerPath.path);
-    const relativePath = relative(rootPath, resolvedPath);
+    const activeRelativePath = relative(rootPath, resolvedPath);
 
-    if (relativePath === '..' || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+    if (isPathWithinRoot(activeRelativePath)) {
+      return resolvedPath;
+    }
+
+    const configuredRelativePath = relative(this.configuredRootPath, resolvedPath);
+
+    if (!isPathWithinRoot(configuredRelativePath)) {
       throw createLocalProviderError(providerErrorCodes.invalidPath, operation);
     }
 
-    return resolvedPath;
+    return resolve(rootPath, configuredRelativePath);
   }
 
   private async assertNoSymbolicLinkAncestors(

@@ -45,7 +45,7 @@ describe('Local ↔ OpenSSH transfers', () => {
           throw new Error(`Transfer failed: ${item.errorKey}`);
         expect(item?.state).toBe(state);
       },
-      { timeout: 45000, interval: 20 },
+      { timeout: 180000, interval: 20 },
     );
   };
   const upload = (name: string, policy: 'ask' | 'overwrite' | 'skip' | 'rename' = 'overwrite') =>

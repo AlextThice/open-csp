@@ -39,6 +39,21 @@ describe('LocalProvider platform behavior', () => {
     await expect(access(join(outsidePath, 'created'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('accepts paths through a configured root alias after resolving its real path', async () => {
+    const aliasPath = join(outsidePath, 'root-alias');
+    await symlink(rootPath, aliasPath, process.platform === 'win32' ? 'junction' : 'dir');
+    const aliasProvider = new LocalProvider({ rootPath: aliasPath });
+    await aliasProvider.connect();
+
+    try {
+      const directoryPath = createLocalProviderPath(join(aliasPath, 'directory'));
+      await aliasProvider.createDirectory(directoryPath);
+      await expect(aliasProvider.stat(directoryPath)).resolves.toMatchObject({ kind: 'directory' });
+    } finally {
+      await aliasProvider.disconnect();
+    }
+  });
+
   it('streams a file with Unicode, spaces, and a long name in bounded chunks', async () => {
     const directoryPath = join(rootPath, 'Каталог с пробелами');
     const longName = `длинное имя ${'a'.repeat(120)}.bin`;

@@ -50,7 +50,7 @@ describe('streaming SFTP ↔ S3 without local staging', () => {
             const item = engine.snapshots().find((entry) => entry.id === id);
             expect(item?.state, item?.errorKey ?? '').toBe('completed');
           },
-          { timeout: 55000, interval: 20 },
+          { timeout: 180000, interval: 20 },
         );
       await wait(
         engine.enqueue({

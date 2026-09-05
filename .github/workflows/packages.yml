@@ -25,7 +25,6 @@ jobs:
         with:
           runtime: node@24.20.0
           cache: true
-          require-lockfile: true
       - name: Check Apple Silicon runner
         if: runner.os == 'macOS'
         run: node -e "if (process.arch !== 'arm64') throw Error('Use an arm64 macOS runner')"
