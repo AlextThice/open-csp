@@ -48,7 +48,10 @@ describe('LocalProvider platform behavior', () => {
     try {
       const directoryPath = createLocalProviderPath(join(aliasPath, 'directory'));
       await aliasProvider.createDirectory(directoryPath);
-      await expect(aliasProvider.stat(directoryPath)).resolves.toMatchObject({ kind: 'directory' });
+      await expect(aliasProvider.stat(directoryPath)).resolves.toMatchObject({
+        kind: 'directory',
+        path: directoryPath,
+      });
     } finally {
       await aliasProvider.disconnect();
     }

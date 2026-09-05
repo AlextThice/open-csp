@@ -103,7 +103,7 @@ export class LocalProvider implements FileSystemProvider {
   }
 
   public get rootPath(): LocalProviderPath {
-    return createLocalProviderPath(this.activeRootPath ?? this.configuredRootPath);
+    return createLocalProviderPath(this.configuredRootPath);
   }
 
   public async connect(options?: ProviderOperationOptions): Promise<void> {
@@ -173,7 +173,8 @@ export class LocalProvider implements FileSystemProvider {
 
           if (
             normalizedError.code !== providerErrorCodes.accessDenied &&
-            normalizedError.code !== providerErrorCodes.notFound
+            normalizedError.code !== providerErrorCodes.notFound &&
+            normalizedError.code !== providerErrorCodes.invalidPath
           ) {
             throw normalizedError;
           }
@@ -452,11 +453,17 @@ export class LocalProvider implements FileSystemProvider {
   }
 
   private toEntry(resolvedPath: string, stats: BigIntStats): FileSystemEntry {
+    const rootPath = this.activeRootPath ?? this.configuredRootPath;
+    const relativePath = relative(rootPath, resolvedPath);
+    const providerPath = isPathWithinRoot(relativePath)
+      ? resolve(this.configuredRootPath, relativePath)
+      : resolvedPath;
+
     return {
       kind: getEntryKind(stats),
       modifiedAt: stats.mtime.toISOString(),
       name: basename(resolvedPath) || resolvedPath,
-      path: createLocalProviderPath(resolvedPath),
+      path: createLocalProviderPath(providerPath),
       permissions: Number(stats.mode),
       size: stats.size,
     };
